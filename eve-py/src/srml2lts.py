@@ -120,27 +120,4 @@ def Arena2LTS(mdl):
                     #                        valuation_table[frozenset(nextLabel)].append(direction)
                     M.add_edge(currentState.index, nextState.index, direction=direction)
     #    print valuation_table
-
-    for p in payoffs:
-        target_state_vars = set()
-        target_state_vars.add(p['state'])
-
-        for vertex in M.vs:
-            if target_state_vars.issubset(set(vertex['label'])):
-                payoff_key = f"payoff_{p['module']}"
-
-                if 'payoffs' in vertex.attributes():
-                    current_payoffs = vertex['payoffs']
-                    if current_payoffs is None:
-                        current_payoffs = {}
-                else:
-                    current_payoffs = {}
-
-                current_payoffs[p['module']] = p['value']
-                vertex['payoffs'] = current_payoffs
-                vertex[payoff_key] = p['value']
-
-    for v in M.vs:
-        print(v)
-
     return M

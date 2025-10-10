@@ -4,17 +4,17 @@ Created on Fri Jul  7 13:53:08 2017
 
 """
 
-from parsrml import *
+import getopt
+
+from anash import *
 from arena2kripke import *
-from srml2lts import *
-import time, sys, getopt
+from enash import *
+from gltl2gpar import convertG, convertG_cgs
 from ltl2nbw import *
 from nbw2dpw import *
-from gltl2gpar import convertG, drawGPar, convertG_cgs
-from utils import *
 from nonemptiness import *
-from enash import *
-from anash import *
+from srml2lts import *
+from mean_payoff import create_zero_sum_games
 
 
 def print_performance(perfConstruction, perfParser, perfPGSolver, empCheck, GPar_v, GPar_e, TTPG_vmax, TTPG_emax,
@@ -79,12 +79,17 @@ def main(argv):
     '''read and parse the file'''
     perfParser = 0.0
     start = time.time() * 1000
-    if (yacc.parse(open(str(file_name)).read()) != False):
+    if yacc.parse(open(str(file_name)).read()):
         perfParser = time.time() * 1000 - start
     if len(environment) != 0:
         cgsFlag = True
     else:
         cgsFlag = False
+
+    if payoffs:
+        mp_flag = True
+    else:
+        mp_flag = False
 
     perfConstruction = 0.0
     start = time.time() * 1000
@@ -96,7 +101,7 @@ def main(argv):
         pf = None
 
     if prob == "e":
-        if pf == None:
+        if pf is None:
             print("No property formula input...")
         else:
             print("Checking E-Nash property formula: " + replace_symbols(pf))
@@ -113,7 +118,7 @@ def main(argv):
 
         '''add 2 MP players'''
     elif prob == "a":
-        if pf == None:
+        if pf is None:
             print("No property formula input...")
         else:
             print("Checking A-Nash property formula: " + replace_symbols(pf))
@@ -142,6 +147,10 @@ def main(argv):
     # if draw_flag:
     #     drawM(M)
 
+    if mp_flag:
+        GMPs = create_zero_sum_games(M)
+        return
+
     '''Don't need to do LTL2DPW conversion for memoryless case'''
     if q_flag in [1, 2, 4]:
         NBWs = Graph(directed=True)
@@ -151,7 +160,6 @@ def main(argv):
         for m in modules:
             #        states = []
             NBWs[list(m[1])[0]] = ltl2nbw(list(m[5])[0], list(m[6]))
-            #           print list(m[5])[0],list(m[1])[0]
             NBWs[list(m[1])[0]]['goal'] = list(m[5])[0]
             goal = list(m[5])[0]
             goal = replace_symbols(goal)
@@ -173,6 +181,7 @@ def main(argv):
             if verbose:
                 print("\n Convert G_{LTL} to G_{PAR}...\n")
             GPar = convertG_cgs(modules, DPWs, M)
+
         GPar_v = GPar.vcount()
         GPar_e = GPar.ecount()
         perfConstruction = time.time() * 1000 - start
