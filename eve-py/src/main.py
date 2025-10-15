@@ -148,6 +148,7 @@ def main(argv):
     #     drawM(M)
 
     if mp_flag:
+
         GMPs = create_zero_sum_games(M)
         return
 
