@@ -34,9 +34,9 @@ def create_zero_sum_games(lts: Graph):
                 edge = g.es[e_index]
                 e_source = g.vs[edge.source]
                 e_target = g.vs[edge.target]
-                print(f"{e_source['label']} -- l={edge['label']} --> {e_target['label']}")
+                print(f"{e_source['label']} -- (l={edge['label']}, {edge['weight']}) --> {e_target['label']}")
 
-        # solve_game_with_meanpayoff(g, name)
+        solve_game_with_meanpayoff(g, name)
         # plot_game(g, name)
 
         break
@@ -47,16 +47,9 @@ def create_player_game(lts: Graph, player_name: str, player_vars: set):
 
     intermediate_vs_from_v = defaultdict(set)
     for v in lts.vs:
-        v_payoff = None
-        for payoff_spec in game_spec.payoffs:
-            player = payoff_spec["module"]
-            value = payoff_spec["value"]
-            state = payoff_spec["state"]
-            if player == player_name and state in v["label"][~0]:
-                v_payoff = value
-                break
+        v_payoff = get_state_payoff(player_name, v)
 
-        g.add_vertex(label=v["label"][~0], type="state", payoff=v_payoff)
+        g.add_vertex(label=v["label"][~0], type="state", payoff=v_payoff, player="min")
         source = g.vs.find(label=v["label"][~0])
 
         coalition_actions_from_v = set()
@@ -74,16 +67,19 @@ def create_player_game(lts: Graph, player_name: str, player_vars: set):
 
             i = 0
             for combo in itertools.product([True, False], repeat=len(actions_list)):
-                full_node_name = f"v{v.index}_{actions_list[i]}_{str(combo[i]).lower()}"
+                full_node_name = f"s{v.index}_{actions_list[i]}_{str(combo[i]).lower()}"
                 try:
                     existing_node = g.vs.find(label=full_node_name)
                     intermediate_vertex = existing_node
                 except ValueError:
-                    g.add_vertex(label=full_node_name,
-                                 type="intermediate",
-                                 payoff=v_payoff)
+                    g.add_vertex(
+                        label=[full_node_name],
+                        type="intermediate",
+                        payoff=v_payoff,
+                        player="max"
+                    )
                     intermediate_vs_from_v[v].add(full_node_name)
-                    intermediate_vertex = g.vs.find(label=full_node_name)
+                    intermediate_vertex = g.vs.find(label=[full_node_name])
 
                 add_edge = True
                 if g.es:
@@ -91,12 +87,17 @@ def create_player_game(lts: Graph, player_name: str, player_vars: set):
                     if matched_edge.source == source.index and matched_edge.target == intermediate_vertex.index:
                         add_edge = False
                 if add_edge:
-                    g.add_edge(source=source,
-                               target=intermediate_vertex,
-                               label="min")
+                    g.add_edge(
+                        source=source,
+                        target=intermediate_vertex,
+                        label="min",
+                        weight=v_payoff * -1
+                    )
 
     for v in lts.vs:
         source = g.vs.find(label=v["label"][~0])
+        v_payoff = get_state_payoff(player_name, v)
+
         for edge_index in lts.incident(v, mode="out"):
             out_edge = lts.es[edge_index]
             if not out_edge["direction"]:
@@ -104,21 +105,35 @@ def create_player_game(lts: Graph, player_name: str, player_vars: set):
             for var in out_edge["direction"]:
                 if var and var in player_vars:
                     for i_name in intermediate_vs_from_v[v]:
-                        intermediate_v = g.vs.find(label=i_name)
+                        intermediate_v = g.vs.find(label=[i_name])
                         if out_edge.source == out_edge.target:
                             g.add_edge(
                                 source=intermediate_v,
                                 target=source,
-                                label="max"
+                                label="max",
+                                weight=v_payoff
                             )
                         else:
                             target = g.vs.find(label=lts.vs[out_edge.target]["label"][~0])
                             g.add_edge(
                                 source=intermediate_v,
                                 target=target,
-                                label="max"
+                                label="max",
+                                weight=v_payoff
                             )
     return g
+
+
+def get_state_payoff(player_name, v):
+    v_payoff = None
+    for payoff_spec in game_spec.payoffs:
+        player = payoff_spec["module"]
+        value = payoff_spec["value"]
+        state = payoff_spec["state"]
+        if player == player_name and state in v["label"][~0]:
+            v_payoff = value
+            break
+    return v_payoff
 
 
 def plot_game(g: Graph, player_name: str):
@@ -183,37 +198,17 @@ def plot_game(g: Graph, player_name: str):
 
 
 def solve_game_with_meanpayoff(g: Graph, player_name: str):
-    """Convert the game to meanpayoff format and solve it"""
-    print(f"\n=== Solving game for player: {player_name} ===")
-
-    # First, let's debug the game structure
-    print(f"Game structure: {g.vcount()} vertices, {g.ecount()} edges")
-    print("Vertices:")
-    for v in g.vs:
-        print(f"  {v['name']} (type: {v['type']}, payoff: {v['payoff']})")
-
-    print("Edges:")
-    for e in g.es:
-        source_name = g.vs[e.source]['name']
-        target_name = g.vs[e.target]['name']
-        print(f"  {source_name} -> {target_name} (label: {e['label']})")
-
-    # Create a temporary file for the game data
     with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
         temp_filename = f.name
-
-        # Convert the game to meanpayoff format
         edges_written = convert_game_to_meanpayoff_format(g, f)
 
     print(f"Created game file with {edges_written} edges: {temp_filename}")
 
-    # Let's also print the contents of the file for debugging
     print("Game file contents:")
     with open(temp_filename, 'r') as f:
         print(f.read())
 
     try:
-        # Call the meanpayoff solver with current working directory
         current_dir = os.getcwd()
         meanpayoff_path = os.path.join(current_dir, 'meanpayoff')
 
@@ -260,8 +255,21 @@ def convert_game_to_meanpayoff_format(g: Graph, file_handle):
     edges_written = 0
 
     vertex_mapping = {}
+    min_index = 0
+    max_index = 1
     for i, vertex in enumerate(g.vs):
-        vertex_mapping[vertex['name']] = i
+        print("!!!!!")
+        print(vertex['label'])
+        print(vertex['payoff'])
+        if vertex['player'] == "min":
+            index = min_index
+            min_index += 1
+        else:
+            index = max_index
+            max_index += 1
+        vertex_mapping[vertex['label'][~0]] = index
+
+    print(vertex_mapping)
 
     print("Vertex mapping:")
     for name, idx in vertex_mapping.items():
@@ -269,8 +277,8 @@ def convert_game_to_meanpayoff_format(g: Graph, file_handle):
 
     written_edges = set()
     for edge in g.es:
-        source_id = vertex_mapping[g.vs[edge.source]['name']]
-        target_id = vertex_mapping[g.vs[edge.target]['name']]
+        source_id = vertex_mapping[g.vs[edge.source]['label'][~0]]
+        target_id = vertex_mapping[g.vs[edge.target]['label'][~0]]
 
         if source_id == target_id:
             print(f"  Skipping self-loop: {source_id} -> {target_id}")
@@ -281,7 +289,7 @@ def convert_game_to_meanpayoff_format(g: Graph, file_handle):
             print(f"  Skipping duplicate edge: {source_id} -> {target_id}")
             continue
 
-        weight = calculate_edge_weight(g, edge)
+        weight = edge["weight"]
 
         file_handle.write(f"{source_id} {target_id} {weight}\n")
         written_edges.add(edge_key)
@@ -303,7 +311,9 @@ def convert_game_to_meanpayoff_format(g: Graph, file_handle):
 
 
 def calculate_edge_weight(g: Graph, edge):
-    pass
+    if edge["label"] == "min":
+        return g.vs[edge.source]["payoff"] * -1
+    return g.vs[edge.source]["payoff"]
 
 
 def parse_meanpayoff_results(output: str, player_name: str):
