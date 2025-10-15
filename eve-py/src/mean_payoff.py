@@ -56,8 +56,8 @@ def create_player_game(lts: Graph, player_name: str, player_vars: set):
                 v_payoff = value
                 break
 
-        g.add_vertex(name=f"v{v.index}", label=v["label"][~0], type="state", payoff=v_payoff)
-        source = g.vs.find(name=f"v{v.index}")
+        g.add_vertex(label=v["label"][~0], type="state", payoff=v_payoff)
+        source = g.vs.find(label=v["label"][~0])
 
         coalition_actions_from_v = set()
         for edge_index in lts.incident(v, mode="out"):
@@ -76,15 +76,14 @@ def create_player_game(lts: Graph, player_name: str, player_vars: set):
             for combo in itertools.product([True, False], repeat=len(actions_list)):
                 full_node_name = f"v{v.index}_{actions_list[i]}_{str(combo[i]).lower()}"
                 try:
-                    existing_node = g.vs.find(name=full_node_name)
+                    existing_node = g.vs.find(label=full_node_name)
                     intermediate_vertex = existing_node
                 except ValueError:
-                    g.add_vertex(name=full_node_name,
-                                 label=full_node_name,
+                    g.add_vertex(label=full_node_name,
                                  type="intermediate",
                                  payoff=v_payoff)
                     intermediate_vs_from_v[v].add(full_node_name)
-                    intermediate_vertex = g.vs.find(name=full_node_name)
+                    intermediate_vertex = g.vs.find(label=full_node_name)
 
                 add_edge = True
                 if g.es:
@@ -105,7 +104,7 @@ def create_player_game(lts: Graph, player_name: str, player_vars: set):
             for var in out_edge["direction"]:
                 if var and var in player_vars:
                     for i_name in intermediate_vs_from_v[v]:
-                        intermediate_v = g.vs.find(name=i_name)
+                        intermediate_v = g.vs.find(label=i_name)
                         if out_edge.source == out_edge.target:
                             g.add_edge(
                                 source=intermediate_v,
