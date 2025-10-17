@@ -11,16 +11,6 @@ import parsrml as game_spec
 
 def create_zero_sum_games(lts: Graph):
     players = [(list(m[1])[0], m[2]) for m in game_spec.modules]
-
-    # print("lts is:")
-    # for v in lts.vs:
-    #     print(v)
-    #     for e_index in lts.incident(v):
-    #         edge = lts.es[e_index]
-    #         e_source = lts.vs[edge.source]
-    #         e_target = lts.vs[edge.target]
-    #         print(f"{e_source['label'][1]} -- l={edge['direction']} --> {e_target['label'][1]}")
-
     zero_sum_turn_based_games = []
     for name, owned_vars in players:
         g = create_player_game(lts, name, owned_vars)
@@ -37,8 +27,6 @@ def create_zero_sum_games(lts: Graph):
                 print(f"{e_source['label']} -- (l={edge['label']}, {edge['weight']}) --> {e_target['label']}")
 
         solve_game_with_meanpayoff(g, name)
-        # plot_game(g, name)
-
         break
 
 
@@ -135,68 +123,6 @@ def get_state_payoff(player_name, v):
             break
     return v_payoff
 
-
-def plot_game(g: Graph, player_name: str):
-    print(f"Creating plot for player: {player_name}")
-    print(f"Graph has {g.vcount()} vertices and {g.ecount()} edges")
-
-    # Set visual style
-    visual_style = {}
-
-    # Vertex styling
-    vertex_colors = []
-    vertex_shapes = []
-    for vertex in g.vs:
-        if vertex["type"] == "state":
-            vertex_colors.append("lightblue")
-            vertex_shapes.append("circle")
-        else:
-            vertex_colors.append("lightgreen")
-            vertex_shapes.append("square")
-
-    visual_style["vertex_color"] = vertex_colors
-    visual_style["vertex_shape"] = vertex_shapes
-    visual_style["vertex_size"] = 40
-    visual_style["vertex_label"] = g.vs["label"]
-    visual_style["vertex_label_size"] = 12
-
-    edge_colors = []
-    for edge in g.es:
-        if edge["label"] == "min":
-            edge_colors.append("red")
-        else:
-            edge_colors.append("blue")
-
-    visual_style["edge_color"] = edge_colors
-    visual_style["edge_width"] = 2
-    visual_style["edge_label"] = g.es["label"]
-    visual_style["edge_arrow_size"] = 1.0
-    visual_style["edge_curved"] = 0.2
-
-    # Layout
-    visual_style["layout"] = g.layout("fr")
-    visual_style["bbox"] = (1000, 800)
-    visual_style["margin"] = 80
-
-    # Save to file
-    filename = f"game_{player_name}.png"
-    plot(g, filename, **visual_style)
-    print(f"Plot saved as: {filename}")
-
-    try:
-        import matplotlib.pyplot as plt
-        import matplotlib.image as mpimg
-        img = mpimg.imread(filename)
-        plt.figure(figsize=(12, 8))
-        plt.imshow(img)
-        plt.axis('off')
-        plt.title(f'Game for player: {player_name}')
-        plt.show()
-    except Exception as e:
-        print(f"Could not display plot: {e}")
-        print(f"But the file was saved as {filename}")
-
-
 def solve_game_with_meanpayoff(g: Graph, player_name: str):
     with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
         temp_filename = f.name
@@ -244,7 +170,6 @@ def solve_game_with_meanpayoff(g: Graph, player_name: str):
     except Exception as e:
         print(f"Error running meanpayoff solver: {e}")
     finally:
-        # Clean up the temporary file
         try:
             os.unlink(temp_filename)
         except:
@@ -258,22 +183,13 @@ def convert_game_to_meanpayoff_format(g: Graph, file_handle):
     min_index = 0
     max_index = 1
     for i, vertex in enumerate(g.vs):
-        print("!!!!!")
-        print(vertex['label'])
-        print(vertex['payoff'])
         if vertex['player'] == "min":
             index = min_index
-            min_index += 1
+            min_index += 2
         else:
             index = max_index
-            max_index += 1
+            max_index += 2
         vertex_mapping[vertex['label'][~0]] = index
-
-    print(vertex_mapping)
-
-    print("Vertex mapping:")
-    for name, idx in vertex_mapping.items():
-        print(f"  {name} -> {idx}")
 
     written_edges = set()
     for edge in g.es:
@@ -296,28 +212,10 @@ def convert_game_to_meanpayoff_format(g: Graph, file_handle):
         edges_written += 1
         print(f"  Writing edge: {source_id} -> {target_id} (weight: {weight})")
 
-    all_states = set(vertex_mapping.values())
-    states_with_edges = set(source for source, target in written_edges)
-    states_without_edges = all_states - states_with_edges
-
-    if states_without_edges:
-        print(f"Warning: States without outgoing edges: {states_without_edges}")
-        for state in states_without_edges:
-            file_handle.write(f"{state} {state} 0\n")
-            edges_written += 1
-            print(f"  Adding self-loop for isolated state: {state} -> {state} (weight: 0)")
-
     return edges_written
 
 
-def calculate_edge_weight(g: Graph, edge):
-    if edge["label"] == "min":
-        return g.vs[edge.source]["payoff"] * -1
-    return g.vs[edge.source]["payoff"]
-
-
 def parse_meanpayoff_results(output: str, player_name: str):
-    """Parse the output from meanpayoff solver and extract useful information"""
     print(f"Raw output for {player_name}:")
     print("---")
     print(output)
