@@ -4,7 +4,7 @@ import subprocess
 import tempfile
 from collections import defaultdict
 
-from igraph import Graph, plot
+from igraph import Graph
 
 import parsrml as game_spec
 
