@@ -25,8 +25,14 @@ class TestValueIterationAlgorithm(unittest.TestCase):
         g.add_edge(source=v, target=w, weight=0)
         g.add_edge(source=w, target=v, weight=-4)
 
-        solve_energy_game(g)
-        self.assertEqual(True, False)
+        values = solve_energy_game(g)
+
+        maximal_value = 15
+        self.assertEqual(values['x'], 0)
+        self.assertEqual(values['z'], 3)
+        self.assertEqual(values['v'], maximal_value)
+        self.assertEqual(values['w'], maximal_value)
+        self.assertEqual(values['y'], 0)
 
 
 if __name__ == '__main__':
