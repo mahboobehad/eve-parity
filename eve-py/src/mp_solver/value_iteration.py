@@ -23,7 +23,8 @@ def solve_mp_game_recursive(g, low, high, values, max_denominator):
     if len(g.vs) == 1 or high - low < 1.0 / (max_denominator ** 2):
         mid = (low + high) / 2
         for v in g.vs:
-            label = v['label']
+            label = v['label'] if not isinstance(v['label'], list) else v['label'][~0]
+
             if label not in values:
                 values[label] = mid
 
@@ -46,7 +47,7 @@ def solve_mp_game_recursive(g, low, high, values, max_denominator):
     elif q1 is None or q2 is None:
         mid = (low + high) / 2
         for v in g.vs:
-            label = v['label']
+            label = v['label'] if not isinstance(v['label'], list) else v['label'][~0]
             if label not in values:
                 values[label] = mid
         return
@@ -96,7 +97,7 @@ def solve_mp_game_recursive(g, low, high, values, max_denominator):
         solve_mp_game_recursive(subgraph_gt, a2, high, values, min(max_denominator, len(subgraph_gt.vs)))
 
     for v in g.vs:
-        label = v['label']
+        label = v['label'] if not isinstance(v['label'], list) else v['label'][~0]
         if label not in values:
             mid = (a1 + a2) / 2
             values[label] = mid
@@ -269,6 +270,9 @@ def solve_energy_game(game_graph: Graph):
 
     result_by_label = {}
     for vertex, value in progress_measures.items():
+        if isinstance(vertex['label'], list):
+            vertex['label'] = vertex['label'][~0]
+
         result_by_label[vertex['label']] = value
 
     return result_by_label

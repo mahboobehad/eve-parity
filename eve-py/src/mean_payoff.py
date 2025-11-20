@@ -1,12 +1,10 @@
 import itertools
-import os
-import subprocess
-import tempfile
 from collections import defaultdict
 
 from igraph import Graph
 
 import parsrml as game_spec
+from mp_solver.value_iteration import solve_mp_game
 
 
 def create_zero_sum_games(lts: Graph):
@@ -26,7 +24,7 @@ def create_zero_sum_games(lts: Graph):
                 e_target = g.vs[edge.target]
                 print(f"{e_source['label']} -- (l={edge['label']}, {edge['weight']}) --> {e_target['label']}")
 
-        solve_game_with_meanpayoff(g, name)
+        solve_mean_payoff_game(g)
         break
 
 
@@ -37,7 +35,7 @@ def create_player_game(lts: Graph, player_name: str, player_vars: set):
     for v in lts.vs:
         v_payoff = get_state_payoff(player_name, v)
 
-        g.add_vertex(label=v["label"][~0], type="state", payoff=v_payoff, player="min")
+        g.add_vertex(label=v["label"][~0], type="state", payoff=v_payoff, player=0)
         source = g.vs.find(label=v["label"][~0])
 
         coalition_actions_from_v = set()
@@ -64,7 +62,7 @@ def create_player_game(lts: Graph, player_name: str, player_vars: set):
                         label=[full_node_name],
                         type="intermediate",
                         payoff=v_payoff,
-                        player="max"
+                        player=1
                     )
                     intermediate_vs_from_v[v].add(full_node_name)
                     intermediate_vertex = g.vs.find(label=[full_node_name])
@@ -123,134 +121,7 @@ def get_state_payoff(player_name, v):
             break
     return v_payoff
 
-def solve_game_with_meanpayoff(g: Graph, player_name: str):
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
-        temp_filename = f.name
-        edges_written = convert_game_to_meanpayoff_format(g, f)
 
-    print(f"Created game file with {edges_written} edges: {temp_filename}")
-
-    print("Game file contents:")
-    with open(temp_filename, 'r') as f:
-        print(f.read())
-
-    try:
-        current_dir = os.getcwd()
-        meanpayoff_path = os.path.join(current_dir, 'meanpayoff')
-
-        print(f"Running: {meanpayoff_path} {temp_filename}")
-
-        result = subprocess.run([meanpayoff_path, temp_filename],
-                                capture_output=True, text=True, timeout=30,
-                                cwd=current_dir)
-
-        print("Meanpayoff solver completed")
-        print(f"Return code: {result.returncode}")
-        print("STDOUT:")
-        print(result.stdout)
-        if result.stderr:
-            print("STDERR:")
-            print(result.stderr)
-
-        # Parse the results
-        if result.returncode == 0:
-            parse_meanpayoff_results(result.stdout, player_name)
-        else:
-            print(f"Solver failed with return code {result.returncode}")
-
-    except subprocess.TimeoutExpired:
-        print(f"Meanpayoff solver timed out for player {player_name}")
-    except FileNotFoundError:
-        print(f"Error: meanpayoff executable not found at {meanpayoff_path}")
-        print("Current directory contents:")
-        try:
-            print(os.listdir(current_dir))
-        except:
-            pass
-    except Exception as e:
-        print(f"Error running meanpayoff solver: {e}")
-    finally:
-        try:
-            os.unlink(temp_filename)
-        except:
-            pass
-
-
-def convert_game_to_meanpayoff_format(g: Graph, file_handle):
-    edges_written = 0
-
-    vertex_mapping = {}
-    min_index = 0
-    max_index = 1
-    for i, vertex in enumerate(g.vs):
-        if vertex['player'] == "min":
-            index = min_index
-            min_index += 2
-        else:
-            index = max_index
-            max_index += 2
-        vertex_mapping[vertex['label'][~0]] = index
-
-    written_edges = set()
-    for edge in g.es:
-        source_id = vertex_mapping[g.vs[edge.source]['label'][~0]]
-        target_id = vertex_mapping[g.vs[edge.target]['label'][~0]]
-
-        if source_id == target_id:
-            print(f"  Skipping self-loop: {source_id} -> {target_id}")
-            continue
-
-        edge_key = (source_id, target_id)
-        if edge_key in written_edges:
-            print(f"  Skipping duplicate edge: {source_id} -> {target_id}")
-            continue
-
-        weight = edge["weight"]
-
-        file_handle.write(f"{source_id} {target_id} {weight}\n")
-        written_edges.add(edge_key)
-        edges_written += 1
-        print(f"  Writing edge: {source_id} -> {target_id} (weight: {weight})")
-
-    return edges_written
-
-
-def parse_meanpayoff_results(output: str, player_name: str):
-    print(f"Raw output for {player_name}:")
-    print("---")
-    print(output)
-    print("---")
-
-    lines = output.split('\n')
-
-    results_section = False
-    state_results = []
-
-    for line in lines:
-        print(f"Processing line: '{line}'")
-        if "Results:" in line:
-            results_section = True
-            print("Found results section")
-            continue
-        if results_section and "State:" in line:
-            print(f"Found state result line: {line}")
-            # Parse lines like: "State: 0  MP: 3.0  Bias: 1.5"
-            parts = line.split()
-            if len(parts) >= 6:
-                try:
-                    state_id = int(parts[1])
-                    mp_value = float(parts[3])
-                    bias_value = float(parts[5])
-                    state_results.append((state_id, mp_value, bias_value))
-                    print(f"Successfully parsed: state={state_id}, mp={mp_value}, bias={bias_value}")
-                except (ValueError, IndexError) as e:
-                    print(f"Error parsing line: {e}")
-
-    print(f"\nParsed results for {player_name}:")
-    if state_results:
-        for state_id, mp_value, bias_value in state_results:
-            print(f"  State {state_id}: MP={mp_value}, Bias={bias_value}")
-    else:
-        print("  No results parsed - check if solver produced expected output format")
-
-    return state_results
+def solve_mean_payoff_game(g: Graph):
+    game_values = solve_mp_game(g)
+    print(game_values)
