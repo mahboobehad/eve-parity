@@ -3,7 +3,41 @@ from typing import List, Dict, Set
 from igraph import Graph, Vertex
 
 
-def solve_mp_game(game_graph: Graph):
+def simple_solve_mp_game(g):
+    values = {v['label'][~0]: 0 for v in g.vs}
+
+    for iteration in range(100):
+        old_values = values.copy()
+
+        for v in g.vs:
+            v_label = v['label'][~0]
+            outgoing_edges = g.es[g.incident(v, mode="out")]
+
+            if v['player'] == 0:
+                min_val = float('inf')
+                for edge in outgoing_edges:
+                    target = g.vs[edge.target]
+                    target_label = target['label'][~0]
+                    val = edge['weight'] + old_values[target_label]
+                    min_val = min(min_val, val)
+                values[v_label] = min_val
+            else:
+                max_val = float('-inf')
+                for edge in outgoing_edges:
+                    target = g.vs[edge.target]
+                    target_label = target['label'][~0]
+                    val = edge['weight'] + old_values[target_label]
+                    max_val = max(max_val, val)
+                values[v_label] = max_val
+
+        if old_values == values:
+            print(f"Converged after {iteration} iterations")
+            break
+
+    return values
+
+
+def solve_mp_game_faster(game_graph: Graph):
     if len(game_graph.vs) == 0:
         return {}
 

@@ -11,10 +11,10 @@ from arena2kripke import *
 from enash import *
 from gltl2gpar import convertG, convertG_cgs
 from ltl2nbw import *
+from mean_payoff import solve_e_nash_mp
 from nbw2dpw import *
 from nonemptiness import *
 from srml2lts import *
-from mean_payoff import create_zero_sum_games
 
 
 def print_performance(perfConstruction, perfParser, perfPGSolver, empCheck, GPar_v, GPar_e, TTPG_vmax, TTPG_emax,
@@ -148,8 +148,7 @@ def main(argv):
     #     drawM(M)
 
     if mp_flag:
-
-        GMPs = create_zero_sum_games(M)
+        GMPs = solve_e_nash_mp(M)
         return
 
     '''Don't need to do LTL2DPW conversion for memoryless case'''

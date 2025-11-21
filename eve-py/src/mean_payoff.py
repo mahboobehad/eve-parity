@@ -4,12 +4,27 @@ from collections import defaultdict
 from igraph import Graph
 
 import parsrml as game_spec
-from mp_solver.value_iteration import solve_mp_game
+from mp_solver.value_iteration import simple_solve_mp_game
+
+
+def solve_e_nash_mp(lts: Graph):
+    punishments = create_zero_sum_games(lts)
+    print(punishments)
+
+    z_vectors = generate_z_vectors(punishments)
+    print(z_vectors)
+
+    for z_vector in z_vectors:
+        G_z = compute_G_z(lts, punishments, z_vector)
+
+    return False
 
 
 def create_zero_sum_games(lts: Graph):
     players = [(list(m[1])[0], m[2]) for m in game_spec.modules]
     zero_sum_turn_based_games = []
+
+    punishments = dict()
     for name, owned_vars in players:
         g = create_player_game(lts, name, owned_vars)
         zero_sum_turn_based_games.append(g)
@@ -22,10 +37,35 @@ def create_zero_sum_games(lts: Graph):
                 edge = g.es[e_index]
                 e_source = g.vs[edge.source]
                 e_target = g.vs[edge.target]
-                print(f"{e_source['label']} -- (l={edge['label']}, {edge['weight']}) --> {e_target['label']}")
+                print(
+                    f"{e_source['label'], e_source['player']} -- (l={edge['label']}, {edge['weight']}) --> {e_target['label'], e_target['player']}")
 
-        solve_mean_payoff_game(g)
-        break
+        values = solve_mean_payoff_game(g)
+        punishments[name] = values
+
+    return punishments
+
+
+def generate_z_vectors(punishments):
+    player_names = list(punishments.keys())
+
+    all_punishment_values = []
+    for player_name in player_names:
+        player_puns = punishments[player_name]
+        if isinstance(player_puns, dict):
+            values = list(player_puns.values())
+        else:
+            values = [player_puns]
+        all_punishment_values.append(sorted(set(values)))
+
+    z_vectors = []
+    for combo in itertools.product(*all_punishment_values):
+        z_vector = {}
+        for i, player_name in enumerate(player_names):
+            z_vector[player_name] = combo[i]
+        z_vectors.append(z_vector)
+
+    return z_vectors
 
 
 def create_player_game(lts: Graph, player_name: str, player_vars: set):
@@ -35,7 +75,7 @@ def create_player_game(lts: Graph, player_name: str, player_vars: set):
     for v in lts.vs:
         v_payoff = get_state_payoff(player_name, v)
 
-        g.add_vertex(label=v["label"][~0], type="state", payoff=v_payoff, player=0)
+        g.add_vertex(label=v["label"][~0], type="state", payoff=v_payoff, player=1)
         source = g.vs.find(label=v["label"][~0])
 
         coalition_actions_from_v = set()
@@ -62,7 +102,7 @@ def create_player_game(lts: Graph, player_name: str, player_vars: set):
                         label=[full_node_name],
                         type="intermediate",
                         payoff=v_payoff,
-                        player=1
+                        player=0
                     )
                     intermediate_vs_from_v[v].add(full_node_name)
                     intermediate_vertex = g.vs.find(label=[full_node_name])
@@ -123,5 +163,13 @@ def get_state_payoff(player_name, v):
 
 
 def solve_mean_payoff_game(g: Graph):
-    game_values = solve_mp_game(g)
-    print(game_values)
+    game_values = simple_solve_mp_game(g)
+
+    for v in g.vs:
+        if v["player"] == 0:
+            game_values.pop(v["label"][~0])
+    return game_values
+
+
+def compute_G_z(g, punishments, z_vector):
+    pass
