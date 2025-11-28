@@ -8,7 +8,7 @@ from mp_solver.value_iteration import simple_solve_mp_game
 
 
 def solve_e_nash_mp(lts: Graph):
-    punishments = create_zero_sum_games(lts)
+    punishments = find_punishment_values(lts)
     print(punishments)
 
     z_vectors = generate_z_vectors(punishments)
@@ -16,11 +16,12 @@ def solve_e_nash_mp(lts: Graph):
 
     for z_vector in z_vectors:
         G_z = compute_G_z(lts, punishments, z_vector)
+        print(G_z)
 
     return False
 
 
-def create_zero_sum_games(lts: Graph):
+def find_punishment_values(lts: Graph):
     players = [(list(m[1])[0], m[2]) for m in game_spec.modules]
     zero_sum_turn_based_games = []
 
@@ -38,7 +39,8 @@ def create_zero_sum_games(lts: Graph):
                 e_source = g.vs[edge.source]
                 e_target = g.vs[edge.target]
                 print(
-                    f"{e_source['label'], e_source['player']} -- (l={edge['label']}, {edge['weight']}) --> {e_target['label'], e_target['player']}")
+                    f"{e_source['label'], e_source['player']} -- (l={edge['label']}, {edge['weight']}) --> {e_target['label'], e_target['player']}"
+                )
 
         values = solve_mean_payoff_game(g)
         punishments[name] = values
@@ -164,6 +166,7 @@ def get_state_payoff(player_name, v):
 
 def solve_mean_payoff_game(g: Graph):
     game_values = simple_solve_mp_game(g)
+    print(game_values)
 
     for v in g.vs:
         if v["player"] == 0:
@@ -172,4 +175,122 @@ def solve_mean_payoff_game(g: Graph):
 
 
 def compute_G_z(g, punishments, z_vector):
-    pass
+    valid_states = set()
+    owned_vars = get_player_vars_dict()
+
+    for v in g.vs:
+        state_label = v["label"][~0] if isinstance(v["label"], list) else v["label"]
+        keep_state = True
+
+        for player_name, z_value in z_vector.items():
+            try:
+                pun_value = punishments[player_name].get(state_label[~0][~0], float('-inf'))
+            except (IndexError, TypeError):
+                pun_value = punishments[player_name].get(state_label, float('-inf'))
+
+            if pun_value > z_value:
+                keep_state = False
+                break
+
+        if keep_state:
+            valid_states.add(v.index)
+
+    valid_edges = set()
+    for v_index in valid_states:
+        v = g.vs[v_index]
+
+        for edge_index in g.incident(v, mode="out"):
+            edge = g.es[edge_index]
+            if not edge["direction"]:
+                continue
+
+            is_secure = True
+
+            for player_name, z_value in z_vector.items():
+                if not is_action_secure(g, edge, player_name, z_value, punishments, valid_states, owned_vars):
+                    is_secure = False
+                    break
+
+            if is_secure:
+                if edge.target in valid_states:
+                    valid_edges.add(edge_index)
+
+    G_z = Graph(directed=True)
+    old_to_new_map = {}
+
+    sorted_valid_states = sorted(list(valid_states))
+    for new_index, old_index in enumerate(sorted_valid_states):
+        old_vertex = g.vs[old_index]
+        G_z.add_vertex(**old_vertex.attributes())
+        old_to_new_map[old_index] = new_index
+
+    edges_to_add = []
+    edge_attributes = defaultdict(list)
+
+    for old_edge_index in valid_edges:
+        old_edge = g.es[old_edge_index]
+
+        if old_edge.source in old_to_new_map and old_edge.target in old_to_new_map:
+            new_source = old_to_new_map[old_edge.source]
+            new_target = old_to_new_map[old_edge.target]
+
+            edges_to_add.append((new_source, new_target))
+
+            for attr_name, attr_val in old_edge.attributes().items():
+                edge_attributes[attr_name].append(attr_val)
+
+    if edges_to_add:
+        G_z.add_edges(edges_to_add)
+
+        for attr_name, values in edge_attributes.items():
+            G_z.es[attr_name] = values
+
+    return G_z
+
+
+def is_action_secure(g: Graph, edge, player_name: str, z_value: float,
+                     punishments: dict, valid_states: set, player_vars_dict: dict) -> bool:
+    print(player_vars_dict)
+    player_vars = player_vars_dict.get(player_name, set())
+    action_profile = edge["direction"]
+
+    for var in player_vars:
+        if var in action_profile:
+            for deviation in [True, False]:
+                deviated_action = list(action_profile)
+                deviated_action[deviated_action.index(var)] = not var if deviation else var
+
+                target_state_index = find_transition_target(g, edge.source, deviated_action)
+                if target_state_index is None:
+                    continue
+
+                if target_state_index not in valid_states:
+                    return False
+
+                src = g.vs.find(edge.source)
+                state_label = src["label"][~0][~0]
+                pun_value = punishments[player_name].get(state_label, float('-inf'))
+                if pun_value > z_value:
+                    return False
+
+    return True
+
+
+def find_transition_target(lts: Graph, source_index: int, action_profile: list):
+    source_vertex = lts.vs[source_index]
+
+    for edge_index in lts.incident(source_vertex, mode="out"):
+        edge = lts.es[edge_index]
+        if edge["direction"] == action_profile:
+            return edge.target
+
+    return None
+
+
+def get_player_vars_dict():
+    player_vars_dict = {}
+    for module in game_spec.modules:
+        player_name = list(module[1])[0]
+        owned_vars = module[2]
+        player_vars_dict[player_name] = owned_vars
+    return player_vars_dict
