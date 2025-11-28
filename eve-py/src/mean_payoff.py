@@ -176,44 +176,20 @@ def solve_mean_payoff_game(g: Graph):
 
 def compute_G_z(g, punishments, z_vector):
     valid_states = set()
-    owned_vars = get_player_vars_dict()
 
     for v in g.vs:
-        state_label = v["label"][~0] if isinstance(v["label"], list) else v["label"]
-        keep_state = True
+        is_valid = True
+        label = v["label"]
 
         for player_name, z_value in z_vector.items():
-            try:
-                pun_value = punishments[player_name].get(state_label[~0][~0], float('-inf'))
-            except (IndexError, TypeError):
-                pun_value = punishments[player_name].get(state_label, float('-inf'))
+            pun_value = get_punishment_value(label, punishments[player_name])
 
             if pun_value > z_value:
-                keep_state = False
+                is_valid = False
                 break
 
-        if keep_state:
+        if is_valid:
             valid_states.add(v.index)
-
-    valid_edges = set()
-    for v_index in valid_states:
-        v = g.vs[v_index]
-
-        for edge_index in g.incident(v, mode="out"):
-            edge = g.es[edge_index]
-            if not edge["direction"]:
-                continue
-
-            is_secure = True
-
-            for player_name, z_value in z_vector.items():
-                if not is_action_secure(g, edge, player_name, z_value, punishments, valid_states, owned_vars):
-                    is_secure = False
-                    break
-
-            if is_secure:
-                if edge.target in valid_states:
-                    valid_edges.add(edge_index)
 
     G_z = Graph(directed=True)
     old_to_new_map = {}
@@ -227,61 +203,93 @@ def compute_G_z(g, punishments, z_vector):
     edges_to_add = []
     edge_attributes = defaultdict(list)
 
-    for old_edge_index in valid_edges:
-        old_edge = g.es[old_edge_index]
-
-        if old_edge.source in old_to_new_map and old_edge.target in old_to_new_map:
-            new_source = old_to_new_map[old_edge.source]
-            new_target = old_to_new_map[old_edge.target]
-
+    for edge in g.es:
+        if edge.source in valid_states and edge.target in valid_states:
+            new_source = old_to_new_map[edge.source]
+            new_target = old_to_new_map[edge.target]
             edges_to_add.append((new_source, new_target))
 
-            for attr_name, attr_val in old_edge.attributes().items():
+            for attr_name, attr_val in edge.attributes().items():
                 edge_attributes[attr_name].append(attr_val)
 
     if edges_to_add:
         G_z.add_edges(edges_to_add)
-
         for attr_name, values in edge_attributes.items():
             G_z.es[attr_name] = values
 
     return G_z
 
 
+def get_punishment_value(label_data, punishment_dict):
+    candidates = []
+
+    if isinstance(label_data, (list, tuple)):
+        stack = list(label_data)
+        while stack:
+            item = stack.pop()
+            if isinstance(item, (list, tuple)):
+                stack.extend(item)
+            else:
+                candidates.append(item)
+    else:
+        candidates.append(label_data)
+
+    for cand in candidates:
+        if str(cand) in punishment_dict:
+            return punishment_dict[str(cand)]
+        if cand in punishment_dict:
+            return punishment_dict[cand]
+
+    return float('inf')
+
+
 def is_action_secure(g: Graph, edge, player_name: str, z_value: float,
                      punishments: dict, valid_states: set, player_vars_dict: dict) -> bool:
-    print(player_vars_dict)
     player_vars = player_vars_dict.get(player_name, set())
-    action_profile = edge["direction"]
+
+    if edge["direction"] is None:
+        return True
+
+    action_profile = set(edge["direction"])
 
     for var in player_vars:
-        if var in action_profile:
-            for deviation in [True, False]:
-                deviated_action = list(action_profile)
-                deviated_action[deviated_action.index(var)] = not var if deviation else var
+        is_currently_true = var in action_profile
+        deviated_profile_set = action_profile.copy()
 
-                target_state_index = find_transition_target(g, edge.source, deviated_action)
-                if target_state_index is None:
-                    continue
+        if is_currently_true:
+            deviated_profile_set.remove(var)
+        else:
+            deviated_profile_set.add(var)
 
-                if target_state_index not in valid_states:
-                    return False
+        deviated_action = sorted(list(deviated_profile_set))
 
-                src = g.vs.find(edge.source)
-                state_label = src["label"][~0][~0]
-                pun_value = punishments[player_name].get(state_label, float('-inf'))
-                if pun_value > z_value:
-                    return False
+        target_state_index = find_transition_target(g, edge.source, deviated_action)
+
+        if target_state_index is not None:
+            if target_state_index not in valid_states:
+                return False
+
+            tgt = g.vs[target_state_index]
+            pun_value = get_punishment_value(tgt["label"], punishments[player_name])
+
+            if pun_value > z_value:
+                return False
 
     return True
 
 
 def find_transition_target(lts: Graph, source_index: int, action_profile: list):
     source_vertex = lts.vs[source_index]
+    target_profile_sorted = sorted(action_profile)
 
     for edge_index in lts.incident(source_vertex, mode="out"):
         edge = lts.es[edge_index]
-        if edge["direction"] == action_profile:
+
+        d = edge["direction"]
+        if d is None:
+            continue
+
+        if sorted(d) == target_profile_sorted:
             return edge.target
 
     return None
@@ -294,3 +302,12 @@ def get_player_vars_dict():
         owned_vars = module[2]
         player_vars_dict[player_name] = owned_vars
     return player_vars_dict
+
+
+def get_most_specific_label(label_data):
+    current = label_data
+    while isinstance(current, (list, tuple)):
+        if not current:
+            return None
+        current = current[-1]
+    return current
