@@ -50,21 +50,15 @@ def find_punishment_values(lts: Graph):
 
 def generate_z_vectors(punishments):
     player_names = list(punishments.keys())
-
     all_punishment_values = []
+
     for player_name in player_names:
-        player_puns = punishments[player_name]
-        if isinstance(player_puns, dict):
-            values = list(player_puns.values())
-        else:
-            values = [player_puns]
-        all_punishment_values.append(sorted(set(values)))
+        vals = set(punishments[player_name].values())
+        all_punishment_values.append(sorted(list(vals)))
 
     z_vectors = []
     for combo in itertools.product(*all_punishment_values):
-        z_vector = {}
-        for i, player_name in enumerate(player_names):
-            z_vector[player_name] = combo[i]
+        z_vector = {name: val for name, val in zip(player_names, combo)}
         z_vectors.append(z_vector)
 
     return z_vectors
@@ -241,58 +235,6 @@ def get_punishment_value(label_data, punishment_dict):
             return punishment_dict[cand]
 
     return float('inf')
-
-
-def is_action_secure(g: Graph, edge, player_name: str, z_value: float,
-                     punishments: dict, valid_states: set, player_vars_dict: dict) -> bool:
-    player_vars = player_vars_dict.get(player_name, set())
-
-    if edge["direction"] is None:
-        return True
-
-    action_profile = set(edge["direction"])
-
-    for var in player_vars:
-        is_currently_true = var in action_profile
-        deviated_profile_set = action_profile.copy()
-
-        if is_currently_true:
-            deviated_profile_set.remove(var)
-        else:
-            deviated_profile_set.add(var)
-
-        deviated_action = sorted(list(deviated_profile_set))
-
-        target_state_index = find_transition_target(g, edge.source, deviated_action)
-
-        if target_state_index is not None:
-            if target_state_index not in valid_states:
-                return False
-
-            tgt = g.vs[target_state_index]
-            pun_value = get_punishment_value(tgt["label"], punishments[player_name])
-
-            if pun_value > z_value:
-                return False
-
-    return True
-
-
-def find_transition_target(lts: Graph, source_index: int, action_profile: list):
-    source_vertex = lts.vs[source_index]
-    target_profile_sorted = sorted(action_profile)
-
-    for edge_index in lts.incident(source_vertex, mode="out"):
-        edge = lts.es[edge_index]
-
-        d = edge["direction"]
-        if d is None:
-            continue
-
-        if sorted(d) == target_profile_sorted:
-            return edge.target
-
-    return None
 
 
 def get_player_vars_dict():
