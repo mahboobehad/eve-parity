@@ -235,21 +235,3 @@ def get_punishment_value(label_data, punishment_dict):
             return punishment_dict[cand]
 
     return float('inf')
-
-
-def get_player_vars_dict():
-    player_vars_dict = {}
-    for module in game_spec.modules:
-        player_name = list(module[1])[0]
-        owned_vars = module[2]
-        player_vars_dict[player_name] = owned_vars
-    return player_vars_dict
-
-
-def get_most_specific_label(label_data):
-    current = label_data
-    while isinstance(current, (list, tuple)):
-        if not current:
-            return None
-        current = current[-1]
-    return current
