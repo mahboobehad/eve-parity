@@ -11,7 +11,7 @@ from arena2kripke import *
 from enash import *
 from gltl2gpar import convertG, convertG_cgs
 from ltl2nbw import *
-from mean_payoff import solve_e_nash_mp
+from mean_payoff import solve_e_nash_mp, solve_a_nash_mp
 from nbw2dpw import *
 from nonemptiness import *
 from srml2lts import *
@@ -148,7 +148,10 @@ def main(argv):
     #     drawM(M)
 
     if mp_flag:
-        GMPs = solve_e_nash_mp(M)
+        if q_flag == 1:
+            solve_e_nash_mp(M)
+        if q_flag == 2:
+            solve_a_nash_mp(M)
         return
 
     '''Don't need to do LTL2DPW conversion for memoryless case'''

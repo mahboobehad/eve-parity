@@ -17,7 +17,21 @@ def solve_e_nash_mp(lts: Graph):
     for z_vector in z_vectors:
         G_z = compute_G_z(lts, punishments, z_vector)
         print(G_z)
+        # TODO: call lim avg ltl checker
 
+    return False
+
+
+def solve_a_nash_mp(lts: Graph):
+    punishments = find_punishment_values(lts)
+
+    z_vectors = generate_z_vectors(punishments)
+    print(z_vectors)
+
+    for z_vector in z_vectors:
+        G_z = compute_G_z(lts, punishments, z_vector)
+        print(G_z)
+        # TODO: call lim avg ltl checker
     return False
 
 
