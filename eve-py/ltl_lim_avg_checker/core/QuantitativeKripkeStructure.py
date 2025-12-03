@@ -1,5 +1,5 @@
-from typing import Dict, Set, Tuple, List, Optional
-from graphviz import Digraph
+from typing import Dict, Set, Tuple, List
+
 
 class QuantitativeKripkeStructure:
     def __init__(self,

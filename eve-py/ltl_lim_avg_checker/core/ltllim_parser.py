@@ -1,13 +1,18 @@
+import sys
+
 import numpy as np
-import ply.lex as lex
-import ply.yacc as yacc
+
 from itertools import product as itertools_product
 import subprocess
 import json
 from typing import Set, List, Tuple, Dict, Any
 from scipy.spatial import ConvexHull
 from fractions import Fraction
-from core.QuantitativeKripkeStructure import QuantitativeKripkeStructure
+from .QuantitativeKripkeStructure import QuantitativeKripkeStructure
+
+sys.path.insert(0, "../../")
+import ply.lex as lex
+import ply.yacc as yacc
 
 addrOfZ3Solver = "/home/otebook/z3_lp_solver.py"
 addrOfSpotLib = "/home/otebook/ltl_to_nbw.py"
