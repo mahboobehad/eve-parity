@@ -1,10 +1,16 @@
 import itertools
+import json
+import os
+import subprocess
+import sys
+import tempfile
 from collections import defaultdict
 
 from igraph import Graph
 
 import parsrml as game_spec
 from mp_solver.value_iteration import simple_solve_mp_game
+from srmlutil import productInit
 
 
 def solve_e_nash_mp(lts: Graph):
@@ -249,3 +255,98 @@ def get_punishment_value(label_data, punishment_dict):
             return punishment_dict[cand]
 
     return float('inf')
+
+
+def run_limavg_checker(qks_dict, formula, quiet=True):
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+        json.dump(qks_dict, f, indent=2)
+        qks_path = f.name
+
+    tool_path = os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "ltl_lim_avg_checker",
+        "core",
+        "main.py"
+    )
+    tool_path = os.path.abspath(tool_path)
+
+    cmd = [sys.executable, tool_path, "--qks-file", qks_path]
+    if quiet:
+        cmd.append("--quiet")
+    cmd.append(formula)
+
+    proc = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+    )
+    out, err = proc.communicate()
+
+    try:
+        os.remove(qks_path)
+    except:
+        pass
+
+    return proc.returncode, out, err
+
+
+def qks_from_igraph(G, mdl, payoff_key="payoff"):
+    init_prod = list(productInit(mdl))
+    if len(init_prod) != 1:
+        raise ValueError(f"SRML model has {len(init_prod)} initial states; QKS supports exactly one.")
+
+    init_true_vars = set(init_prod[0])
+
+    states = []
+    edges = []
+    logical_formulas = {}
+    numeric_values = {}
+    boolean_vars = set()
+
+    def flatten_label(label):
+        if isinstance(label, (list, tuple)):
+            flat = []
+            stack = list(label)
+            while stack:
+                x = stack.pop()
+                if isinstance(x, (list, tuple)):
+                    stack.extend(x)
+                else:
+                    flat.append(str(x))
+            return flat
+        return [str(label)]
+
+    init_state_name = None
+
+    for v in G.vs:
+        lbl = flatten_label(v["label"])
+        state_name = f"q{v.index}"
+        states.append(state_name)
+
+        valuation = set([x for x in lbl if not x.endswith("_false")])
+        logical_formulas[state_name] = list(valuation)
+        boolean_vars |= valuation
+
+        if payoff_key in v.attributes():
+            numeric_values[state_name] = {"payoff": float(v[payoff_key])}
+        else:
+            numeric_values[state_name] = {"payoff": 0.0}
+
+        if valuation == init_true_vars:
+            init_state_name = state_name
+
+    if init_state_name is None:
+        raise ValueError("ERROR: No igraph vertex matches the SRML initial valuation.")
+
+    for e in G.es:
+        s = f"q{e.source}"
+        t = f"q{e.target}"
+        edges.append((s, t))
+
+    return {
+        "states": states,
+        "init_state": init_state_name,
+        "edges": edges,
+        "boolean_vars": sorted(boolean_vars),
+        "logical_formulas": logical_formulas,
+        "numeric_values": numeric_values
+    }
