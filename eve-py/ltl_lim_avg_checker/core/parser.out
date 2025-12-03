@@ -1,0 +1,102 @@
+Created by PLY version 3.11 (http://www.dabeaz.com/ply)
+
+Unused terminals:
+
+    COMMA
+    LBRACKET
+    RBRACKET
+
+Grammar
+
+Rule 0     S' -> formula
+Rule 1     formula -> proposition
+Rule 2     formula -> path_assertion
+Rule 3     formula -> prefix_assertion
+Rule 4     formula -> temporal_formula
+Rule 5     formula -> binary_formula
+Rule 6     formula -> unary_formula
+Rule 7     formula -> paren_formula
+Rule 8     proposition -> PROPOSITION
+Rule 9     path_assertion -> LIM_INF_AVG LPAREN VARIABLE RPAREN GEQ REAL
+Rule 10    path_assertion -> LIM_SUP_AVG LPAREN VARIABLE RPAREN GEQ REAL
+Rule 11    prefix_assertion -> arithmetic_expr GEQ arithmetic_expr
+Rule 12    prefix_assertion -> arithmetic_expr LEQ arithmetic_expr
+Rule 13    prefix_assertion -> arithmetic_expr GT arithmetic_expr
+Rule 14    prefix_assertion -> arithmetic_expr LT arithmetic_expr
+Rule 15    prefix_assertion -> arithmetic_expr EQ arithmetic_expr
+Rule 16    arithmetic_expr -> term
+Rule 17    arithmetic_expr -> arithmetic_expr PLUS term
+Rule 18    arithmetic_expr -> arithmetic_expr MINUS term
+Rule 19    term -> factor
+Rule 20    term -> term TIMES factor
+Rule 21    term -> term DIVIDE factor
+Rule 22    factor -> REAL
+Rule 23    factor -> VARIABLE
+Rule 24    factor -> sum_expr
+Rule 25    factor -> avg_expr
+Rule 26    factor -> LPAREN arithmetic_expr RPAREN
+Rule 27    sum_expr -> SUM LPAREN VARIABLE RPAREN
+Rule 28    avg_expr -> AVG LPAREN VARIABLE RPAREN
+Rule 29    unary_formula -> NEG formula
+Rule 30    unary_formula -> NEXT formula
+Rule 31    unary_formula -> FINALLY formula
+Rule 32    unary_formula -> GLOBALLY formula
+Rule 33    binary_formula -> formula AND formula
+Rule 34    binary_formula -> formula OR formula
+Rule 35    binary_formula -> formula UNTIL formula
+Rule 36    binary_formula -> formula RELEASE formula
+Rule 37    binary_formula -> formula IMPLIES formula
+Rule 38    binary_formula -> formula IFF formula
+Rule 39    paren_formula -> LPAREN formula RPAREN
+
+Terminals, with rules where they appear
+
+AND                  : 33
+AVG                  : 28
+COMMA                : 
+DIVIDE               : 21
+EQ                   : 15
+FINALLY              : 31
+GEQ                  : 9 10 11
+GLOBALLY             : 32
+GT                   : 13
+IFF                  : 38
+IMPLIES              : 37
+LBRACKET             : 
+LEQ                  : 12
+LIM_INF_AVG          : 9
+LIM_SUP_AVG          : 10
+LPAREN               : 9 10 26 27 28 39
+LT                   : 14
+MINUS                : 18
+NEG                  : 29
+NEXT                 : 30
+OR                   : 34
+PLUS                 : 17
+PROPOSITION          : 8
+RBRACKET             : 
+REAL                 : 9 10 22
+RELEASE              : 36
+RPAREN               : 9 10 26 27 28 39
+SUM                  : 27
+TIMES                : 20
+UNTIL                : 35
+VARIABLE             : 9 10 23 27 28
+error                : 
+
+Nonterminals, with rules where they appear
+
+arithmetic_expr      : 11 11 12 12 13 13 14 14 15 15 17 18 26
+avg_expr             : 25
+binary_formula       : 5
+factor               : 19 20 21
+formula              : 29 30 31 32 33 33 34 34 35 35 36 36 37 37 38 38 39 0
+paren_formula        : 7
+path_assertion       : 2
+prefix_assertion     : 3
+proposition          : 1
+sum_expr             : 24
+temporal_formula     : 4
+term                 : 16 17 18 20 21
+unary_formula        : 6
+
