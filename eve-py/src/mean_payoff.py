@@ -1,3 +1,4 @@
+import ast
 import itertools
 import json
 import os
@@ -10,7 +11,7 @@ from igraph import Graph
 
 import parsrml as game_spec
 from mp_solver.value_iteration import simple_solve_mp_game
-from srmlutil import productInit
+from srmlutil import productInit, getValuation
 
 
 def solve_e_nash_mp(lts: Graph):
@@ -23,7 +24,7 @@ def solve_e_nash_mp(lts: Graph):
     for z_vector in z_vectors:
         G_z = compute_G_z(lts, punishments, z_vector)
         print(G_z)
-        # TODO: call lim avg ltl checker
+        print(convert_gz_to_qks(G_z, lts, game_spec, game_spec.environment))
 
     return False
 
@@ -289,64 +290,91 @@ def run_limavg_checker(qks_dict, formula, quiet=True):
     return proc.returncode, out, err
 
 
-def qks_from_igraph(G, mdl, payoff_key="payoff"):
-    init_prod = list(productInit(mdl))
-    if len(init_prod) != 1:
-        raise ValueError(f"SRML model has {len(init_prod)} initial states; QKS supports exactly one.")
-
-    init_true_vars = set(init_prod[0])
-
-    states = []
-    edges = []
-    logical_formulas = {}
-    numeric_values = {}
-    boolean_vars = set()
-
-    def flatten_label(label):
-        if isinstance(label, (list, tuple)):
-            flat = []
-            stack = list(label)
-            while stack:
-                x = stack.pop()
-                if isinstance(x, (list, tuple)):
-                    stack.extend(x)
-                else:
-                    flat.append(str(x))
-            return flat
-        return [str(label)]
-
-    init_state_name = None
-
-    for v in G.vs:
-        lbl = flatten_label(v["label"])
-        state_name = f"q{v.index}"
-        states.append(state_name)
-
-        valuation = set([x for x in lbl if not x.endswith("_false")])
-        logical_formulas[state_name] = list(valuation)
-        boolean_vars |= valuation
-
-        if payoff_key in v.attributes():
-            numeric_values[state_name] = {"payoff": float(v[payoff_key])}
-        else:
-            numeric_values[state_name] = {"payoff": 0.0}
-
-        if valuation == init_true_vars:
-            init_state_name = state_name
-
-    if init_state_name is None:
-        raise ValueError("ERROR: No igraph vertex matches the SRML initial valuation.")
-
-    for e in G.es:
-        s = f"q{e.source}"
-        t = f"q{e.target}"
-        edges.append((s, t))
-
-    return {
-        "states": states,
-        "init_state": init_state_name,
-        "edges": edges,
-        "boolean_vars": sorted(boolean_vars),
-        "logical_formulas": logical_formulas,
-        "numeric_values": numeric_values
+def convert_gz_to_qks(g_z: Graph, lts: Graph, spec, environment):
+    qks_dict = {
+        "states": [],
+        "init_state": "",
+        "edges": [],
+        "boolean_vars": [],
+        "logical_formulas": {},
+        "numeric_values": {}
     }
+
+    all_bool_vars = set()
+    player_names = []
+    for module in spec.modules:
+        p_name = list(module[1])[0]
+        player_names.append(p_name)
+        for var in module[2]:
+            all_bool_vars.add(var)
+
+    qks_dict["boolean_vars"] = sorted(list(all_bool_vars))
+
+    label_to_new_name = {}
+    for v in g_z.vs:
+        state_name = f"s{v.index}"
+        qks_dict["states"].append(state_name)
+        label_to_new_name[str(v["label"])] = state_name
+
+        qks_dict["logical_formulas"][state_name] = get_valuation_from_label(v['label'])
+
+        state_payoffs = {}
+        for player_name in player_names:
+            state_payoffs[player_name] = get_state_payoff(player_name, v)
+        qks_dict["numeric_values"][state_name] = state_payoffs
+
+    found_init = False
+
+    init_raw_states = productInit(environment)
+
+    for s in init_raw_states:
+        init_label = getValuation(s)
+        init_label_str = str(init_label)
+
+        if init_label_str in label_to_new_name:
+            qks_dict["init_state"] = label_to_new_name[init_label_str]
+            found_init = True
+            break
+
+    if not found_init:
+        print("warning: calculated initial state not found in G_z. Defaulting to first available state.",
+              file=sys.stderr)
+        if qks_dict["states"]:
+            qks_dict["init_state"] = qks_dict["states"][0]
+
+    for edge in g_z.es:
+        source_v = g_z.vs[edge.source]
+        target_v = g_z.vs[edge.target]
+
+        src_lbl = str(source_v["label"])
+        tgt_lbl = str(target_v["label"])
+
+        if src_lbl in label_to_new_name and tgt_lbl in label_to_new_name:
+            source_name = label_to_new_name[src_lbl]
+            target_name = label_to_new_name[tgt_lbl]
+            qks_dict["edges"].append([source_name, target_name])
+
+    return qks_dict
+
+
+def get_valuation_from_label(label_data):
+    true_vars = set()
+
+    if isinstance(label_data, str):
+        items = [label_data]
+    elif isinstance(label_data, (list, tuple)):
+        items = label_data
+    else:
+        return []
+
+    for item in items:
+        try:
+            parsed_dict = ast.literal_eval(str(item))
+            if isinstance(parsed_dict, dict):
+                for k, v in parsed_dict.items():
+                    if v is True:
+                        true_vars.add(k)
+        except (ValueError, SyntaxError):
+            continue
+
+    return sorted(list(true_vars))
