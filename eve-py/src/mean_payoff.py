@@ -24,7 +24,7 @@ def solve_e_nash_mp(lts: Graph):
     for z_vector in z_vectors:
         G_z = compute_G_z(lts, punishments, z_vector)
         print(G_z)
-        print(convert_gz_to_qks(G_z, lts, game_spec, game_spec.environment))
+        print(convert_gz_to_qks(G_z, lts, game_spec))
 
     return False
 
@@ -290,7 +290,7 @@ def run_limavg_checker(qks_dict, formula, quiet=True):
     return proc.returncode, out, err
 
 
-def convert_gz_to_qks(g_z: Graph, lts: Graph, spec, environment):
+def convert_gz_to_qks(g_z: Graph, spec, environment):
     qks_dict = {
         "states": [],
         "init_state": "",
