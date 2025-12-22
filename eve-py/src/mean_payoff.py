@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 from collections import defaultdict
+from typing import Dict
 
 from igraph import Graph
 
@@ -16,15 +17,17 @@ from srmlutil import productInit, getValuation
 
 def solve_e_nash_mp(lts: Graph):
     punishments = find_punishment_values(lts)
-    print(punishments)
-
     z_vectors = generate_z_vectors(punishments)
-    print(z_vectors)
 
     for z_vector in z_vectors:
         G_z = compute_G_z(lts, punishments, z_vector)
-        print(G_z)
-        print(convert_gz_to_qks(G_z, lts, game_spec))
+        game_property = ''.join(game_spec.propFormula)
+        lim_avg_properties = ' ^ '.join(
+            x for x in [f"LimInfAvg({player_name})>={z_value}" for player_name, z_value in z_vector.items()]
+        )
+        e_nash_property = game_property + " ^ " + lim_avg_properties
+        print(e_nash_property)
+        # print(convert_gz_to_qks(G_z, lts, game_spec))
 
     return False
 
@@ -42,7 +45,7 @@ def solve_a_nash_mp(lts: Graph):
     return False
 
 
-def find_punishment_values(lts: Graph):
+def find_punishment_values(lts: Graph) -> Dict[str, float]:
     players = [(list(m[1])[0], m[2]) for m in game_spec.modules]
     zero_sum_turn_based_games = []
 

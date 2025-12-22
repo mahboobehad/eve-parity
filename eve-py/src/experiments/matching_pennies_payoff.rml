@@ -31,12 +31,12 @@
    :: (ca <-> cb) ~> p' := true, s0' := true, s1' := false;
    :: !(ca <-> cb) ~> p' := false, s0' := false, s1' := true;
 
-  property
-  :: G p;
-
   payoffs
   :: (alice, s0, 1);
   :: (alice, s1, 0);
 
   :: (bob, s0, 0);
   :: (bob, s1, 2);
+
+  property
+  :: G p;
