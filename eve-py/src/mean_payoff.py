@@ -26,8 +26,25 @@ def solve_e_nash_mp(lts: Graph):
             x for x in [f"LimInfAvg({player_name})>={z_value}" for player_name, z_value in z_vector.items()]
         )
         e_nash_property = game_property + " ^ " + lim_avg_properties
-        print(e_nash_property)
-        convert_gz_to_qks(G_z, game_spec, game_spec.environment)
+        print(f"\nChecking e-nash property: {e_nash_property}")
+        qks = convert_gz_to_qks(G_z, game_spec, game_spec.environment)
+        
+        if not qks["states"]:
+            print("  G_z is empty (no valid states satisfy the constraints). Skipping.")
+            continue
+        
+        returncode, stdout, stderr = run_limavg_checker(qks, e_nash_property, quiet=False)
+        
+        if stdout:
+            print(stdout)
+        if stderr:
+            print(stderr, file=sys.stderr)
+        
+        if returncode == 0:
+            print(f"  ✓ Property is SATISFIABLE for z_vector {z_vector}")
+            return True
+        else:
+            print(f"  ✗ Property is UNSATISFIABLE for z_vector {z_vector}")
 
     return False
 
@@ -330,14 +347,53 @@ def convert_gz_to_qks(g_z: Graph, spec, environment):
 
     init_raw_states = productInit(environment)
 
+    # Get initial label from environment
+    init_label = None
     for s in init_raw_states:
         init_label = getValuation(s)
-        init_label_str = str(init_label)
+        break  # productInit should return at most one state
 
+    # Normalize init_label for comparison (handle None case)
+    if init_label is None:
+        init_label_list = []
+    elif isinstance(init_label, (list, tuple)):
+        init_label_list = sorted(list(init_label))
+    else:
+        init_label_list = [init_label]
+
+    # Try to find matching state in G_z by comparing label contents
+    # First try exact string match (original behavior)
+    if init_label is not None:
+        init_label_str = str(init_label)
         if init_label_str in label_to_new_name:
             qks_dict["init_state"] = label_to_new_name[init_label_str]
             found_init = True
-            break
+    
+    # If string match failed, try content-based matching
+    if not found_init:
+        for v in g_z.vs:
+            vertex_label = v["label"]
+            # Handle different label formats: could be list, tuple, or last element of tuple
+            if isinstance(vertex_label, tuple) and len(vertex_label) > 0:
+                vertex_label_content = vertex_label[-1]
+            else:
+                vertex_label_content = vertex_label
+            
+            # Normalize vertex label for comparison
+            if vertex_label_content is None:
+                vertex_label_list = []
+            elif isinstance(vertex_label_content, (list, tuple)):
+                vertex_label_list = sorted(list(vertex_label_content))
+            else:
+                vertex_label_list = [vertex_label_content]
+            
+            # Compare normalized labels (sorted lists to handle order differences)
+            if vertex_label_list == init_label_list:
+                vertex_label_str = str(vertex_label)
+                if vertex_label_str in label_to_new_name:
+                    qks_dict["init_state"] = label_to_new_name[vertex_label_str]
+                    found_init = True
+                    break
 
     if not found_init:
         print("warning: calculated initial state not found in G_z. Defaulting to first available state.",
