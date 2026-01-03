@@ -27,7 +27,7 @@ def solve_e_nash_mp(lts: Graph):
         )
         e_nash_property = game_property + " ^ " + lim_avg_properties
         print(e_nash_property)
-        # print(convert_gz_to_qks(G_z, lts, game_spec))
+        convert_gz_to_qks(G_z, game_spec, game_spec.environment)
 
     return False
 
