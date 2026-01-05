@@ -43,9 +43,8 @@ def solve_e_nash_mp(lts: Graph):
         if returncode == 0:
             print(f"  ✓ Property is SATISFIABLE for z_vector {z_vector}")
             return True
-        else:
-            print(f"  ✗ Property is UNSATISFIABLE for z_vector {z_vector}")
 
+    print(f"  ✗ Property is UNSATISFIABLE")
     return False
 
 
