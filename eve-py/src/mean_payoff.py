@@ -56,9 +56,32 @@ def solve_a_nash_mp(lts: Graph):
 
     for z_vector in z_vectors:
         G_z = compute_G_z(lts, punishments, z_vector)
-        print(G_z)
-        # TODO: call lim avg ltl checker
-    return False
+        game_property = ''.join(game_spec.propFormula)
+        lim_avg_properties = ' ^ '.join(
+            x for x in [f"LimInfAvg({player_name})>={z_value}" for player_name, z_value in z_vector.items()]
+        )
+        negated_game_property = f'!({lim_avg_properties})' + '^' + game_property
+        print(f"\nChecking a-nash property: {negated_game_property}")
+
+        qks = convert_gz_to_qks(G_z, game_spec, game_spec.environment)
+
+        if not qks["states"]:
+            print("  G_z is empty (no valid states satisfy the constraints).")
+            continue    # TODO: check this part? is it a counter example?
+
+        returncode, stdout, stderr = run_limavg_checker(qks, negated_game_property, quiet=False)
+
+        if stdout:
+            print(stdout)
+        if stderr:
+            print(stderr, file=sys.stderr)
+
+        if returncode == 0:
+            print(f"  ✗ Property is UNSATISFIABLE")
+            return False
+
+    print(f"  ✓ all equilibrium are SATISFIABLE ")
+    return True
 
 
 def find_punishment_values(lts: Graph) -> Dict[str, float]:
